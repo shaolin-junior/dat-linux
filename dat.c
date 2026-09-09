@@ -4,8 +4,8 @@
 #include <windows.h>
 #include <openssl/evp.h>
 
-#define DAT_VERSION "0.4.8"
-#define DEV_VERSION "0.4.8.16"
+#define DAT_VERSION "0.5.8"
+#define DEV_VERSION "0.5.8.16"
 
 typedef struct {
     bool help;
@@ -13,7 +13,8 @@ typedef struct {
     bool sha256;
     bool no_print;
     bool compare;
-    const char *paths[2];
+    bool concatenate;
+    const char *paths[3];
     int path_count;
 } Arguments;
 
@@ -51,11 +52,17 @@ int parse_args(int argc, char *argv[], Arguments *args) {
                 return 1;
             }
             args->compare = true;
-        } else if (argv[i][0] == '-') {
+        } else if (strcmp(argv[i], "--cat") == 0) {
+            if (args->concatenate) {
+                printf("Demasiadas opciones.");
+                return 1;
+            }
+            args->concatenate = true;
+        }else if (argv[i][0] == '-') {
             printf("Opción desconocida: %s\n", argv[i]);
             return 1;
-        }else {
-            if (args->path_count == 2) {
+        } else {
+            if (args->path_count == 3) {
                 printf("Error: demasiados archivos.\n");
                 return 1;
             }
@@ -86,17 +93,20 @@ int validate_args(Arguments args) {
     } else if (!args.sha256 && !args.help && !args.version && args.path_count == 0) {
         printf("Falta especificar el archivo.\n");
         return 1;
-    } else if (args.help && args.path_count > 0) {
+    } else if (args.help && args.path_count > 0 || args.help && args.concatenate) {
         printf("Uso: dat -h\n");
         return 1;
-    } else if (args.version && args.path_count > 0) {
+    } else if (args.version && args.path_count > 0 || args.version && args.concatenate) {
         printf("Uso: dat -v");
         return 1;
-    } else if (!args.compare && args.path_count > 1) {
+    } else if (!args.compare && !args.sha256 && args.path_count > 1) {
         printf("Error: demasiados archivos.");
         return 1;
-    } else if (args.compare && args.path_count < 2) {
+    } else if (args.compare && !args.concatenate &&  args.path_count < 2) {
         printf("Uso: dat -c <archivo1> <archivo2>");
+        return 1;
+    } else if (args.concatenate && args.path_count != 3) {
+        printf("Uso dat [operador] --cat <archivo1> <archivo2> <archivo3>");
         return 1;
     }
     return 0;
@@ -126,6 +136,7 @@ int print_file(FILE *file) {
             printf(" %4d | ", line);
         }
     }
+    printf("\n");
     if (ferror(file)) {
         return 1;
     }
@@ -138,7 +149,6 @@ int display_file(const char *path) {
         perror("dat");
         return 1;
     }
-    printf("Archivo: %s \n\n", path);
 
     int error = print_file(file);
     if (error) {
@@ -196,6 +206,17 @@ int sha_256(const char *path, unsigned char hash[32], unsigned int *hash_len) {
     return 0;
 }
 
+void print_hash(const unsigned char *hash, unsigned int hash_len, const char *path) {
+    printf("\nArchivo: %s \n\n", path);
+
+    printf("sha256: ");
+
+    for (unsigned int i = 0; i < hash_len; i++) {
+        printf("%02x", hash[i]);
+    }
+    printf("\n\n");
+}
+
 int compare_files(const char *path_a, const char *path_b) {
     FILE *file_a = open_file(path_a, "rb");
     FILE *file_b = open_file(path_b, "rb");
@@ -227,15 +248,46 @@ int compare_files(const char *path_a, const char *path_b) {
     return 0;    
 }
 
-void print_hash(const unsigned char *hash, unsigned int hash_len, const char *path) {
-    printf("Archivo: %s \n\n", path);
+int print_concatenate(FILE *file, FILE *destiny) {
+    char buffer[4096];
+    size_t read_bytes;
 
-    printf("sha256: ");
+    while((read_bytes = fread(buffer, 1, 4096, file)) > 0) {
+        size_t written_bytes = fwrite(buffer, 1, read_bytes, destiny);
 
-    for (unsigned int i = 0; i < hash_len; i++) {
-        printf("%02x", hash[i]);
+        if (written_bytes < read_bytes) {
+            return 1;
+        }
     }
-    printf("\n\n");
+    return 0;
+}
+
+int concatenate(const char *path_a, const char *path_b, const char *path_final) {
+    FILE *file_a = open_file(path_a, "rb");
+    FILE *file_b = open_file(path_b, "rb");
+    FILE *destiny = open_file(path_final, "wb");
+    int status = 0;
+
+    if (file_a == NULL || file_b == NULL || destiny == NULL) {
+        status = 2;
+    }
+
+    if (status == 0) {
+        if (print_concatenate(file_a, destiny)) {
+            status = 1;
+        }
+    }
+
+    if (status == 0) {
+        if (print_concatenate(file_b, destiny)) {
+            status = 1;
+        }
+    }
+
+    if (file_a != NULL) fclose(file_a);
+    if (file_b != NULL) fclose(file_b);
+    if (destiny != NULL) fclose(destiny);
+    return status;
 }
 
 int main(int argc, char *argv[]) {
@@ -271,26 +323,45 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     if (args.sha256) {
+        int files_to_hash = args.concatenate ? 2 : 1;
 
-        unsigned char hash[32];
-        unsigned int hash_len;
-        int result = sha_256(args.paths[0], hash, &hash_len);
-        if (result) {
-            perror("dat");
+        if (args.path_count > files_to_hash) {
+            printf("Demasiados archivos");
             return 1;
         }
 
-        
-        print_hash(hash, hash_len, args.paths[0]);
+        for(int i = 0; i < files_to_hash; i++) {
+            unsigned char hash[32];
+            unsigned int hash_len;
+            int result = sha_256(args.paths[i], hash, &hash_len);
+            if (result) {
+                perror("dat");
+                return 1;
+            }
 
-        if (!args.no_print) {
-            if(display_file(args.paths[0])) {
+            
+            print_hash(hash, hash_len, args.paths[i]);
+
+            if (!args.no_print) {
+                
+                if(display_file(args.paths[i])) {
+                    return 1;
+                }
+            }
+        }
+        if (args.concatenate) {
+            int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
+            if (result == 1) {
+                printf("Error al escribir el archivo.");
+                return 1;
+            }
+            if (result == 2) {
+                perror("dat");
                 return 1;
             }
         }
         return 0;
     }
-
     if (args.compare) {
         int result = compare_files(args.paths[0], args.paths[1]);
         switch (result)
@@ -305,8 +376,34 @@ int main(int argc, char *argv[]) {
             printf("Los archivos %s y %s son diferentes.\n", args.paths[0], args.paths[1]);
             break;
         }
+        if (args.concatenate) {
+            int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
+            if (result == 1) {
+                printf("Error al escribir el archivo.");
+                return 1;
+            }
+            if (result == 2) {
+                perror("dat");
+                return 1;
+            }
+        }
         return 0;
     }
+    if (args.concatenate) {
+        
+        int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
+        if (result == 1) {
+            printf("Error al escribir el archivo.");
+            return 1;
+        }
+        if (result == 2) {
+            perror("dat");
+            return 1;
+        }
+        return 0;
+    }
+    
+    printf("Archivo: %s \n\n", args.paths[0]);
 
     if(display_file(args.paths[0])) {
         return 1;
