@@ -4,7 +4,7 @@
 #include <openssl/evp.h>
 
 #define DAT_VERSION "0.3.6"
-#define DEV_VERSION "0.3.6.8"
+#define DEV_VERSION "0.3.6.9"
 
 FILE *open_file(const char *path, const char *mode) {
     FILE *file_open = fopen(path, mode);
