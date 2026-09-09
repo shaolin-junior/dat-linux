@@ -94,11 +94,7 @@ void print_help(void) {
 }
 
 FILE *open_file(const char *path, const char *mode) {
-    FILE *file_open = fopen(path, mode);
-    if (file_open == NULL) {
-        return NULL;
-    }
-    return file_open;
+    return fopen(path, mode);
 }
 
 int print_file(FILE *file) {
