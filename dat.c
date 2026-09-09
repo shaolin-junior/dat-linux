@@ -4,8 +4,87 @@
 #include <windows.h>
 #include <openssl/evp.h>
 
-#define DAT_VERSION "0.3.6"
-#define DEV_VERSION "0.3.6.16"
+#define DAT_VERSION "0.3.8"
+#define DEV_VERSION "0.3.8.16"
+
+typedef struct {
+    bool help;
+    bool version;
+    bool sha256;
+    bool no_print;
+    const char *path;
+} Arguments;
+
+int parse_args(int argc, char *argv[], Arguments *args) {
+    *args = (Arguments){0};
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            if (args->help) {
+                printf("Demasiadas opciones.");
+                return 1;
+            }
+            args->help = true;
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
+            if (args->version) {
+                printf("Demasiadas opciones.");
+                return 1;
+            }
+            args->version = true;
+        } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--sha_256") == 0) {
+            if (args->sha256) {
+                printf("Demasiadas opciones.");
+                return 1;
+            }
+            args->sha256 = true;
+        } else if (strcmp(argv[i], "--no-print") ==0) {
+            if (args->no_print) {
+                printf("Demasiadas opciones.");
+                return 1;
+            }
+            args->no_print = true;
+        } else if (argv[i][0] == '-') {
+                printf("Opción desconocida: %s\n", argv[i]);
+                return 1;
+        } else {
+            if (args->path != NULL) {
+                printf("Error: demasiados archivos.\n");
+                return 1;
+            }
+            args->path = argv[i];
+        }
+    }
+    return 0;
+}
+
+int validate_args(Arguments args) {
+    int commands = 0;
+    
+    if (args.help) commands++;
+    if (args.version) commands++;
+    if (args.sha256) commands++;
+
+    if (commands > 1) {
+        printf("No se pueden combinar varias operaciones.\n");
+        return 1;
+    } else if (args.no_print && !args.sha256) {
+        printf("--no-print solo se puede usar con --sha_256 o -s.\n");
+        return 1;
+    } else if (args.sha256 && args.path == NULL) {
+        printf("Uso: dat -s <archivo>\n");
+        return 1;
+    } else if (!args.sha256 && !args.help && !args.version && args.path == NULL) {
+        printf("Falta especificar el archivo.\n");
+        return 1;
+    } else if (args.help && args.path != NULL) {
+        printf("Uso: dat -h\n");
+        return 1;
+    } else if (args.version && args.path != NULL) {
+        printf("Uso: dat -v");
+        return 1;
+    }
+    return 0;
+}
 
 void print_help(void) {
     printf("Ayuda:\n Versión %s\n\nSintaxis:\n", DAT_VERSION);
@@ -118,69 +197,57 @@ void print_hash(const unsigned char *hash, unsigned int hash_len, const char *pa
 int main(int argc, char *argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+
     if(argc < 2) {
         printf("Mire dat --help para ver como usar el programa.");
         return 1;
     }
-    if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v" )== 0) {
-        printf("dat %s\n\n", DAT_VERSION);
-        return 0;
-    } 
+
     if (strcmp(argv[1], "-dev") == 0) {
         printf("\nDev information:\n Versión: %s\n Dev version: %s\n\n", DAT_VERSION, DEV_VERSION);
         return 0;
     }
-    if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+
+    Arguments args;
+
+    if (parse_args(argc, argv, &args)) {
+        return 1;
+    }
+    if (validate_args(args)) {
+        return 1;
+    }
+
+    if (args.version) {
+        printf("dat %s\n\n", DAT_VERSION);
+        return 0;
+    } 
+    
+    if (args.help) {
         print_help();
         return 0;
     }
-    if (strcmp(argv[1], "--sha_256") == 0 || strcmp(argv[1], "-s") == 0) {
-        if(argc < 3) {
-                printf("Uso: dat -s <archivo>\n");
-                return 1;
-        }
+    if (args.sha256) {
 
-        const char *path;
-        bool not_print;
-
-        if (strcmp(argv[2], "--no-print") == 0) {
-            if(argc != 4) {
-                printf("Uso: dat -s --no-print <archivo>\n");
-                return 1;
-            }
-            path = argv[3];
-            not_print = true;
-        } else {
-            if(argc != 3) {
-                printf("Uso: dat -s <archivo>\n");
-                return 1;
-            }
-            path = argv[2];
-            not_print = false;
-        }
         unsigned char hash[32];
         unsigned int hash_len;
-        int result = sha_256(path, hash, &hash_len);
+        int result = sha_256(args.path, hash, &hash_len);
         if (result) {
             perror("dat");
             return 1;
         }
 
         
-        print_hash(hash, hash_len, path);
+        print_hash(hash, hash_len, args.path);
 
-        if (!not_print) {
-
-            if(display_file(path)) {
+        if (!args.no_print) {
+            if(display_file(args.path)) {
                 return 1;
             }
         }
         return 0;
     }
-    const char *path = argv[1];
-    
 
-    if(display_file(path)) {
+    if(display_file(args.path)) {
         return 1;
     }
     
