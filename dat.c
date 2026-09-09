@@ -4,15 +4,17 @@
 #include <windows.h>
 #include <openssl/evp.h>
 
-#define DAT_VERSION "0.3.8"
-#define DEV_VERSION "0.3.8.16"
+#define DAT_VERSION "0.4.8"
+#define DEV_VERSION "0.4.8.16"
 
 typedef struct {
     bool help;
     bool version;
     bool sha256;
     bool no_print;
-    const char *path;
+    bool compare;
+    const char *paths[2];
+    int path_count;
 } Arguments;
 
 int parse_args(int argc, char *argv[], Arguments *args) {
@@ -43,15 +45,22 @@ int parse_args(int argc, char *argv[], Arguments *args) {
                 return 1;
             }
             args->no_print = true;
-        } else if (argv[i][0] == '-') {
-                printf("Opción desconocida: %s\n", argv[i]);
+        } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--compare") == 0) {
+            if (args->compare) {
+                printf("Demasiadas opciones.");
                 return 1;
-        } else {
-            if (args->path != NULL) {
+            }
+            args->compare = true;
+        } else if (argv[i][0] == '-') {
+            printf("Opción desconocida: %s\n", argv[i]);
+            return 1;
+        }else {
+            if (args->path_count == 2) {
                 printf("Error: demasiados archivos.\n");
                 return 1;
             }
-            args->path = argv[i];
+            args->paths[args->path_count] = argv[i];
+            args->path_count++;
         }
     }
     return 0;
@@ -63,6 +72,7 @@ int validate_args(Arguments args) {
     if (args.help) commands++;
     if (args.version) commands++;
     if (args.sha256) commands++;
+    if (args.compare) commands++;
 
     if (commands > 1) {
         printf("No se pueden combinar varias operaciones.\n");
@@ -70,17 +80,23 @@ int validate_args(Arguments args) {
     } else if (args.no_print && !args.sha256) {
         printf("--no-print solo se puede usar con --sha_256 o -s.\n");
         return 1;
-    } else if (args.sha256 && args.path == NULL) {
+    } else if (args.sha256 && args.path_count == 0) {
         printf("Uso: dat -s <archivo>\n");
         return 1;
-    } else if (!args.sha256 && !args.help && !args.version && args.path == NULL) {
+    } else if (!args.sha256 && !args.help && !args.version && args.path_count == 0) {
         printf("Falta especificar el archivo.\n");
         return 1;
-    } else if (args.help && args.path != NULL) {
+    } else if (args.help && args.path_count > 0) {
         printf("Uso: dat -h\n");
         return 1;
-    } else if (args.version && args.path != NULL) {
+    } else if (args.version && args.path_count > 0) {
         printf("Uso: dat -v");
+        return 1;
+    } else if (!args.compare && args.path_count > 1) {
+        printf("Error: demasiados archivos.");
+        return 1;
+    } else if (args.compare && args.path_count < 2) {
+        printf("Uso: dat -c <archivo1> <archivo2>");
         return 1;
     }
     return 0;
@@ -90,7 +106,8 @@ void print_help(void) {
     printf("Ayuda:\n Versión %s\n\nSintaxis:\n", DAT_VERSION);
     printf("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n");
     printf(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo.\n");
-    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s --no-print <archivo>\n dat [-v/--version/-h/--help]\n");
+    printf(" -c o --compare: Compara dos archivos.\n");
+    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s --no-print <archivo>\n dat -c <archivo1> <archivo2>\n dat [-v/--version/-h/--help]\n");
 }
 
 FILE *open_file(const char *path, const char *mode) {
@@ -179,6 +196,37 @@ int sha_256(const char *path, unsigned char hash[32], unsigned int *hash_len) {
     return 0;
 }
 
+int compare_files(const char *path_a, const char *path_b) {
+    FILE *file_a = open_file(path_a, "rb");
+    FILE *file_b = open_file(path_b, "rb");
+
+    if (file_a == NULL || file_b == NULL) {
+        if (file_a != NULL) fclose(file_a);
+        if (file_b != NULL) fclose(file_b);
+        return 1;
+    }
+    int a;
+    int b;
+    
+    while(true) {
+        a = fgetc(file_a);
+        b = fgetc(file_b);
+
+        if (a != b) {
+            fclose(file_a);
+            fclose(file_b);
+            return 2;
+        }
+
+        if (a == EOF && b == EOF) {
+            break;
+        }
+    }
+    fclose(file_a);
+    fclose(file_b);
+    return 0;    
+}
+
 void print_hash(const unsigned char *hash, unsigned int hash_len, const char *path) {
     printf("Archivo: %s \n\n", path);
 
@@ -226,24 +274,41 @@ int main(int argc, char *argv[]) {
 
         unsigned char hash[32];
         unsigned int hash_len;
-        int result = sha_256(args.path, hash, &hash_len);
+        int result = sha_256(args.paths[0], hash, &hash_len);
         if (result) {
             perror("dat");
             return 1;
         }
 
         
-        print_hash(hash, hash_len, args.path);
+        print_hash(hash, hash_len, args.paths[0]);
 
         if (!args.no_print) {
-            if(display_file(args.path)) {
+            if(display_file(args.paths[0])) {
                 return 1;
             }
         }
         return 0;
     }
 
-    if(display_file(args.path)) {
+    if (args.compare) {
+        int result = compare_files(args.paths[0], args.paths[1]);
+        switch (result)
+        {
+        case 0:
+            printf("Los archivos %s y %s son iguales.\n", args.paths[0], args.paths[1]);
+            break;
+        case 1:
+            perror("dat");
+            return 1;
+        case 2:
+            printf("Los archivos %s y %s son diferentes.\n", args.paths[0], args.paths[1]);
+            break;
+        }
+        return 0;
+    }
+
+    if(display_file(args.paths[0])) {
         return 1;
     }
     
