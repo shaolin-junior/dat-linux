@@ -115,9 +115,9 @@ int validate_args(Arguments args) {
 void print_help(void) {
     printf("Ayuda:\n Versión %s\n\nSintaxis:\n", DAT_VERSION);
     printf("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n");
-    printf(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo.\n");
-    printf(" -c o --compare: Compara dos archivos.\n");
-    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s --no-print <archivo>\n dat -c <archivo1> <archivo2>\n dat [-v/--version/-h/--help]\n");
+    printf(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo. Se le añade --cat para concatenar 2 archivos en 1.\n");
+    printf(" -c o --compare: Compara dos archivos.\n\t\t Se le añade --cat para concatenar dos archivos.");
+    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s [flag] <archivo1> <archivo2> archivo3>\n dat -c [flag] <archivo1> <archivo2> <archivo3>\n dat [-v/--version/-h/--help]\n dat --cat <archivo1> archivo2> archivo3>");
 }
 
 FILE *open_file(const char *path, const char *mode) {
