@@ -1,10 +1,18 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <windows.h>
 #include <openssl/evp.h>
 
 #define DAT_VERSION "0.3.6"
 #define DEV_VERSION "0.3.6.9"
+
+void print_help(void) {
+    printf("Ayuda:\n Versión %s\n\nSintaxis:\n", DAT_VERSION);
+    printf("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n");
+    printf(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo.\n");
+    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s --no-print <archivo>\n dat [-v/--version/-h/--help]\n");
+}
 
 FILE *open_file(const char *path, const char *mode) {
     FILE *file_open = fopen(path, mode);
@@ -29,6 +37,25 @@ int print_file(FILE *file) {
     if (ferror(file)) {
         return 1;
     }
+    return 0;
+}
+
+int display_file(const char *path) {
+    FILE *file = open_file(path, "r");
+    if (file == NULL) {
+        perror("dat");
+        return 1;
+    }
+    printf("Archivo: %s \n\n", path);
+
+    int error = print_file(file);
+    if (error) {
+        printf("\nError al leer el archivo.");
+        fclose(file);
+        return 1;
+    }
+
+    fclose(file);
     return 0;
 }
 
@@ -77,6 +104,17 @@ int sha_256(const char *path, unsigned char hash[32], unsigned int *hash_len) {
     return 0;
 }
 
+void print_hash(const unsigned char *hash, unsigned int hash_len, const char *path) {
+    printf("Archivo: %s \n\n", path);
+
+    printf("sha256: ");
+
+    for (unsigned int i = 0; i < hash_len; i++) {
+        printf("%02x", hash[i]);
+    }
+    printf("\n\n");
+}
+
 int main(int argc, char *argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
@@ -93,41 +131,33 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
-        printf("Ayuda:\n Versión %s\n\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n -s o --sha_256: Muestran el hash del archivo en formato sha256. Se le añade --no-print para no mostrar el contenido del archivo.\n\nSintaxis:\n dat [opción] <ruta/archivo>", DAT_VERSION);
+        print_help();
         return 0;
     }
     if (strcmp(argv[1], "--sha_256") == 0 || strcmp(argv[1], "-s") == 0) {
         if(argc < 3) {
-            printf("Uso: dat -s <archivo>\n");
-            return 1;
+                printf("Uso: dat -s <archivo>\n");
+                return 1;
         }
+
+        const char *path;
+        bool not_print;
+
         if (strcmp(argv[2], "--no-print") == 0) {
-            if(argc < 4) {
+            if(argc != 4) {
                 printf("Uso: dat -s --no-print <archivo>\n");
                 return 1;
             }
-            const char *path = argv[3];
-            unsigned char hash[32];
-            unsigned int hash_len;
-            int result = sha_256(path, hash, &hash_len);
-            if (result) {
-                perror("dat");
+            path = argv[3];
+            not_print = true;
+        } else {
+            if(argc != 3) {
+                printf("Uso: dat -s <archivo>\n");
                 return 1;
             }
-
-            
-            printf("Archivo: %s \n\n", path);
-
-            printf("sha256: ");
-
-            for (unsigned int i = 0; i < hash_len; i++) {
-                printf("%02x", hash[i]);
-            }
-            printf("\n\n");
-
-            return 0;
+            path = argv[2];
+            not_print = false;
         }
-        const char *path = argv[2];
         unsigned char hash[32];
         unsigned int hash_len;
         int result = sha_256(path, hash, &hash_len);
@@ -137,50 +167,22 @@ int main(int argc, char *argv[]) {
         }
 
         
-        printf("Archivo: %s \n\n", path);
+        print_hash(hash, hash_len, path);
 
-        printf("sha256: ");
+        if (!not_print) {
 
-        for (unsigned int i = 0; i < hash_len; i++) {
-            printf("%02x", hash[i]);
+            if(display_file(path)) {
+                return 1;
+            }
         }
-        printf("\n\n");
-
-        FILE *file = open_file(path, "r");
-
-        if (file == NULL) {
-            perror("dat");
-            return 1;
-        }
-
-        int error = print_file(file);
-        if (error) {
-            printf("\nError al leer el archivo.");
-            fclose(file);
-            return 1;
-        }
-
-        fclose(file);
         return 0;
     }
     const char *path = argv[1];
     
 
-    FILE *file = open_file(path, "r");
-    if (file == NULL) {
-        perror("dat");
+    if(display_file(path)) {
         return 1;
     }
-    printf("Archivo: %s \n\n", path);
-
-    int error = print_file(file);
-    if (error) {
-        printf("\nError al leer el archivo.");
-        fclose(file);
-        return 1;
-    }
-
-    fclose(file);
     
     return 0;
 }
