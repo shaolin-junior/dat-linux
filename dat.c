@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
         return 0;
     }
     if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
-        printf("Ayuda:\n Versión %s\n\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n -s o --sha_256: Muestran el hash del archivo en formato sha256.\n Se le añade --no-print para no mostrar el contenido del archivo.\n\nSintaxis:\n dat [opción] <ruta/archivo>", DAT_VERSION);
+        printf("Ayuda:\n Versión %s\n\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n -s o --sha_256: Muestran el hash del archivo en formato sha256. Se le añade --no-print para no mostrar el contenido del archivo.\n\nSintaxis:\n dat [opción] <ruta/archivo>", DAT_VERSION);
         return 0;
     }
     if (strcmp(argv[1], "--sha_256") == 0 || strcmp(argv[1], "-s") == 0) {
