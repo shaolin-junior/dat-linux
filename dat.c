@@ -5,7 +5,7 @@
 #include <openssl/evp.h>
 
 #define DAT_VERSION "0.3.6"
-#define DEV_VERSION "0.3.6.9"
+#define DEV_VERSION "0.3.6.16"
 
 void print_help(void) {
     printf("Ayuda:\n Versión %s\n\nSintaxis:\n", DAT_VERSION);
