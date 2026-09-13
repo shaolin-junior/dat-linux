@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-#include <windows.h>
 #include <openssl/evp.h>
 
+#ifdef _WIN32
+    #include <windows.h>
+#endif
+
 #define DAT_VERSION "0.4.8"
-#define DEV_VERSION "0.4.8.16"
+#define DEV_VERSION "0.4.8.20"
 
 typedef struct {
     bool help;
@@ -239,10 +242,13 @@ void print_hash(const unsigned char *hash, unsigned int hash_len, const char *pa
 }
 
 int main(int argc, char *argv[]) {
+
+#ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+#endif
 
-    if(argc < 2) {
+    if (argc < 2) {
         printf("Mire dat --help para ver como usar el programa.");
         return 1;
     }
