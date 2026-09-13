@@ -312,17 +312,13 @@ int main(int argc, char *argv[]) {
     if (validate_args(args)) {
         return 1;
     }
-
     if (args.version) {
         printf("dat %s\n\n", DAT_VERSION);
         return 0;
-    } 
-    
-    if (args.help) {
+    } else if (args.help) {
         print_help();
         return 0;
-    }
-    if (args.sha256) {
+    } else if (args.sha256) {
         int files_to_hash = args.concatenate ? 2 : 1;
 
         if (args.path_count > files_to_hash) {
@@ -361,8 +357,7 @@ int main(int argc, char *argv[]) {
             }
         }
         return 0;
-    }
-    if (args.compare) {
+    } else if (args.compare) {
         int result = compare_files(args.paths[0], args.paths[1]);
         switch (result)
         {
@@ -388,8 +383,7 @@ int main(int argc, char *argv[]) {
             }
         }
         return 0;
-    }
-    if (args.concatenate) {
+    } else if (args.concatenate) {
         
         int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
         if (result == 1) {
@@ -401,13 +395,12 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         return 0;
-    }
-    
-    printf("Archivo: %s \n\n", args.paths[0]);
+    } else {
+        printf("Archivo: %s \n\n", args.paths[0]);
 
-    if(display_file(args.paths[0])) {
-        return 1;
+        if(display_file(args.paths[0])) {
+            return 1;
+        }
+        return 0;
     }
-    
-    return 0;
 }
