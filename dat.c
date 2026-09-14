@@ -102,7 +102,7 @@ int validate_args(Arguments args) {
     } else if (args.version && args.path_count > 0 || args.version && args.concatenate) {
         printf("Uso: dat -v");
         return 1;
-    } else if (!args.compare && !args.sha256 && args.path_count > 1) {
+    } else if (!args.compare && !args.sha256 && !args.concatenate && args.path_count > 1) {
         printf("Error: demasiados archivos.");
         return 1;
     } else if (args.compare && !args.concatenate &&  args.path_count < 2) {
