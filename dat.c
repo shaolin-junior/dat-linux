@@ -3,12 +3,70 @@
 #include <stdbool.h>
 #include <openssl/evp.h>
 
+#define ERROR_NOT_EXISTS 1
+#define ERROR_SAME_FILE 2
+
 #ifdef _WIN32
     #include <windows.h>
+    #define WINDOWS 1
+    int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
+        HANDLE h_a = CreateFileA(path_a, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        HANDLE h_b = CreateFileA(path_b, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+
+        if (h_a == INVALID_HANDLE_VALUE || h_b == INVALID_HANDLE_VALUE) {
+            if (h_a != INVALID_HANDLE_VALUE) CloseHandle(h_a);
+            if (h_b != INVALID_HANDLE_VALUE) CloseHandle(h_b);
+            return ERROR_NOT_EXISTS;
+        }
+
+        HANDLE h_f = CreateFileA(final_path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+        if (h_f == INVALID_HANDLE_VALUE) {
+            CloseHandle(h_a);
+            CloseHandle(h_b);
+            return 0;
+        }
+
+        BY_HANDLE_FILE_INFORMATION info_a, info_b, info_f;
+        int result = 0;
+
+        if (GetFileInformationByHandle(h_a, &info_a) && 
+            GetFileInformationByHandle(h_b, &info_b) && 
+            GetFileInformationByHandle(h_f, &info_f)) {
+            
+            bool same_a = (info_f.dwVolumeSerialNumber == info_a.dwVolumeSerialNumber) && (info_f.nFileIndexHigh == info_a.nFileIndexHigh) && (info_f.nFileIndexLow == info_a.nFileIndexLow);
+
+            bool same_b = (info_f.dwVolumeSerialNumber == info_b.dwVolumeSerialNumber) && (info_f.nFileIndexHigh == info_b.nFileIndexHigh) && (info_f.nFileIndexLow == info_b.nFileIndexLow);
+
+            if (same_a || same_b) {
+                result = ERROR_SAME_FILE;
+            }
+        }
+
+        CloseHandle(h_a);
+        CloseHandle(h_b);
+        CloseHandle(h_f);
+
+        return result;
+    }
+#else
+    #include <sys/stat.h>
+    #define WINDOWS 0
+    int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
+        struct stat st1, st2, stf;
+        if (stat(path_a, &st1) != 0 || stat(path_b, &st2) != 0) {
+            return ERROR_NOT_EXISTS;
+        }
+
+        if (stat(final_path, &stf) != 0) {
+            return 0;
+        }
+
+        return (st1.st_dev == stf.st_dev) && (st1.st_ino == stf.st_ino) || (st2.st_dev == stf.st_dev) && (st2.st_ino == stf.st_ino) ? ERROR_SAME_FILE: 0;
+    }
 #endif
 
 #define DAT_VERSION "0.5.8"
-#define DEV_VERSION "0.5.8.20"
+#define DEV_VERSION "0.5.8.25"
 
 typedef struct {
     bool help;
@@ -96,16 +154,16 @@ int validate_args(Arguments args) {
     } else if (!args.sha256 && !args.help && !args.version && args.path_count == 0) {
         printf("Falta especificar el archivo.\n");
         return 1;
-    } else if (args.help && args.path_count > 0 || args.help && args.concatenate) {
+    } else if ((args.help && args.path_count > 0) || (args.help && args.concatenate)) {
         printf("Uso: dat -h\n");
         return 1;
-    } else if (args.version && args.path_count > 0 || args.version && args.concatenate) {
+    } else if ((args.version && args.path_count > 0) || (args.version && args.concatenate)) {
         printf("Uso: dat -v");
         return 1;
     } else if (!args.compare && !args.sha256 && !args.concatenate && args.path_count > 1) {
         printf("Error: demasiados archivos.");
         return 1;
-    } else if (args.compare && !args.concatenate &&  args.path_count < 2) {
+    } else if (args.compare && !args.concatenate &&  args.path_count != 2) {
         printf("Uso: dat -c <archivo1> <archivo2>");
         return 1;
     } else if (args.concatenate && args.path_count != 3) {
@@ -120,7 +178,7 @@ void print_help(void) {
     printf("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n");
     printf(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo. Se le añade --cat para concatenar 2 archivos en 1.\n");
     printf(" -c o --compare: Compara dos archivos.\n\t\t Se le añade --cat para concatenar dos archivos.");
-    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s [flag] <archivo1> <archivo2> archivo3>\n dat -c [flag] <archivo1> <archivo2> <archivo3>\n dat [-v/--version/-h/--help]\n dat --cat <archivo1> archivo2> archivo3>");
+    printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s [flag] <archivo1> <archivo2> <archivo3>\n dat -c [flag] <archivo1> <archivo2> <archivo3>\n dat [-v/--version/-h/--help]\n dat --cat <archivo1> archivo2> archivo3>");
 }
 
 FILE *open_file(const char *path, const char *mode) {
@@ -293,6 +351,17 @@ int concatenate(const char *path_a, const char *path_b, const char *path_final) 
     return status;
 }
 
+void manage_cat_error(int err) {
+    switch (err) {
+        case ERROR_NOT_EXISTS:
+            printf("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.");
+            break;
+        case ERROR_SAME_FILE:
+            printf("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.");
+            break;
+    }
+}
+
 int main(int argc, char *argv[]) {
 
 #ifdef _WIN32
@@ -325,12 +394,13 @@ int main(int argc, char *argv[]) {
         print_help();
         return 0;
     } else if (args.sha256) {
-        int files_to_hash = args.concatenate ? 2 : 1;
 
-        if (args.path_count > files_to_hash) {
+        if ((args.path_count > 1 && !args.concatenate) || (args.concatenate && args.path_count > 3)) {
             printf("Demasiados archivos");
             return 1;
         }
+
+        int files_to_hash = args.concatenate ? 2 : 1;
 
         for(int i = 0; i < files_to_hash; i++) {
             unsigned char hash[32];
@@ -352,6 +422,11 @@ int main(int argc, char *argv[]) {
             }
         }
         if (args.concatenate) {
+            int err = validate_cat_args(args.paths[0], args.paths[1], args.paths[2]);
+            if (err > 0) {
+                manage_cat_error(err);
+                return 1;
+            }
             int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
             if (result == 1) {
                 printf("Error al escribir el archivo.");
@@ -378,6 +453,11 @@ int main(int argc, char *argv[]) {
             break;
         }
         if (args.concatenate) {
+            int err = validate_cat_args(args.paths[0], args.paths[1], args.paths[2]);
+            if (err > 0) {
+                manage_cat_error(err);
+                return 1;
+            }
             int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
             if (result == 1) {
                 printf("Error al escribir el archivo.");
@@ -390,8 +470,12 @@ int main(int argc, char *argv[]) {
         }
         return 0;
     } else if (args.concatenate) {
-        
-        int  result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
+        int err = validate_cat_args(args.paths[0], args.paths[1], args.paths[2]);
+        if (err > 0) {
+            manage_cat_error(err);
+            return 1;
+        }
+        int result = (concatenate(args.paths[0], args.paths[1], args.paths[2]));
         if (result == 1) {
             printf("Error al escribir el archivo.");
             return 1;
