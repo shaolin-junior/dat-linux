@@ -6,9 +6,12 @@
 #define ERROR_NOT_EXISTS 1
 #define ERROR_SAME_FILE 2
 
+#define DAT_VERSION "0.5.8"
+#define DEV_VERSION "0.5.8.30"
+
 #ifdef _WIN32
     #include <windows.h>
-    #define WINDOWS 1
+
     int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
         HANDLE h_a = CreateFileA(path_a, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
         HANDLE h_b = CreateFileA(path_b, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
@@ -50,7 +53,6 @@
     }
 #else
     #include <sys/stat.h>
-    #define WINDOWS 0
     int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
         struct stat st1, st2, stf;
         if (stat(path_a, &st1) != 0 || stat(path_b, &st2) != 0) {
@@ -64,9 +66,6 @@
         return (st1.st_dev == stf.st_dev) && (st1.st_ino == stf.st_ino) || (st2.st_dev == stf.st_dev) && (st2.st_ino == stf.st_ino) ? ERROR_SAME_FILE: 0;
     }
 #endif
-
-#define DAT_VERSION "0.5.8"
-#define DEV_VERSION "0.5.8.25"
 
 typedef struct {
     bool help;
