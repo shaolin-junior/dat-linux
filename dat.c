@@ -259,10 +259,10 @@ int validate_args(Arguments args) {
     if (args.compare) commands++;
 
     if (commands > 1) {
-        printf("No se pueden combinar varias operaciones.\n");
+        printf("Error: No se pueden combinar varias operaciones.\n");
         return 1;
     } else if (args.no_print && !args.sha256) {
-        printf("--no-print solo se puede usar con --sha_256 o -s.\n");
+        printf("Error: --no-print solo se puede usar con --sha_256 o -s.\n");
         return 1;
     } else if (args.sha256 && args.path_count == 0) {
         printf("Uso: dat -s <archivo>\n");
@@ -271,7 +271,7 @@ int validate_args(Arguments args) {
         printf("Uso: dat -c <archivo1> <archivo2>\n");
         return 1;
     } else if (!args.sha256 && !args.help && !args.version && args.path_count == 0) {
-        printf("Falta especificar el archivo.\n");
+        printf("Error: Falta especificar el archivo.\n");
         return 1;
     } else if ((args.help && args.path_count > 0) || (args.help && args.concatenate)) {
         printf("Uso: dat -h\n");
@@ -282,8 +282,11 @@ int validate_args(Arguments args) {
     } else if (!args.compare && !args.sha256 && !args.concatenate && args.path_count > 1) {
         printf("Error: demasiados archivos.\n");
         return 1;
+    } else if ( args.sha256 && ((args.path_count > 1 && !args.concatenate) || (args.concatenate && args.path_count > 3))) {
+        printf("Error: Demasiados archivos");
+        return 1;
     } else if (args.concatenate && args.path_count != 3) {
-        printf("Uso dat [operador] --cat <archivo1> <archivo2> <archivo3>\n");
+        printf("Uso: dat [operador] --cat <archivo1> <archivo2> <archivo3>\n");
         return 1;
     }
     return 0;
@@ -565,11 +568,6 @@ int main(int argc, char *argv[]) {
         print_help();
         return 0;
     } else if (args.sha256) {
-
-        if ((args.path_count > 1 && !args.concatenate) || (args.concatenate && args.path_count > 3)) {
-            printf("Demasiados archivos");
-            return 1;
-        }
 
         int files_to_hash = args.concatenate ? 2 : 1;
 
