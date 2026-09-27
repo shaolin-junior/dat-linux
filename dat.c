@@ -9,7 +9,7 @@
 #define ERROR_CAT_ACCESS 3
 
 #define DAT_VERSION "0.5.9"
-#define DEV_VERSION "0.5.9.1"
+#define DEV_VERSION "0.5.9.5"
 
 typedef enum{
     ALL_RIGHT = 0,
