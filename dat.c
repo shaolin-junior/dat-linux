@@ -296,7 +296,7 @@ int validate_args(Arguments args) {
 }
 
 void print_separator(const char *top) {
-    for (int i = 0; i < 208; i++){
+    for (int i = 0; i < 145; i++){
         if (i == 6) {
             printf("%s", top);
             continue;
