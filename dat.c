@@ -3,13 +3,14 @@
 #include <stdbool.h>
 #include <openssl/evp.h>
 #include <errno.h>
+#include "println.h"
 
 #define ERROR_NOT_EXISTS 1
 #define ERROR_SAME_FILE 2
 #define ERROR_CAT_ACCESS 3
 
 #define DAT_VERSION "0.5.9"
-#define DEV_VERSION "0.5.9.5"
+#define DEV_VERSION "0.5.9.6"
 
 typedef enum{
     ALL_RIGHT = 0,
@@ -100,11 +101,11 @@ typedef enum{
     void manage_cat_error(int err) {
         switch (err) {
             case ERROR_NOT_EXISTS:
-                printf("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.\n");
+                println("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.");
                 break;
 
             case ERROR_SAME_FILE:
-                printf("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.\n");
+                println("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.");
                 break;
 
             case ERROR_CAT_ACCESS: {
@@ -123,7 +124,7 @@ typedef enum{
                 if (length == 0) {
                     printf("Error de Windows: %lu\n", cat_win_error);
                 } else {
-                    printf("Error de acceso: %s", buffer);
+                    println("Error de acceso: %s", buffer);
                 }
             }
         }
@@ -159,10 +160,10 @@ typedef enum{
     void manage_cat_error(int err) {
         switch (err) {
             case ERROR_NOT_EXISTS:
-                printf("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.\n");
+                println("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.");
                 break;
             case ERROR_SAME_FILE:
-                printf("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.\n");
+                println("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.");
                 break;
             case ERROR_CAT_ACCESS:
                 perror("dat");
@@ -190,7 +191,7 @@ void manage_messages(OutputCode code) {
         perror("dat");
         break;
     case ERROR_WRITE_FILE:
-        printf("Error al escribir el archivo.\n");
+        println("Error al escribir el archivo.");
         break;
     }
 }
@@ -201,46 +202,46 @@ int parse_args(int argc, char *argv[], Arguments *args) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
             if (args->help) {
-                printf("Demasiadas opciones.\n");
+                println("Demasiadas opciones.");
                 return 1;
             }
             args->help = true;
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
             if (args->version) {
-                printf("Demasiadas opciones.\n");
+                println("Demasiadas opciones.");
                 return 1;
             }
             args->version = true;
         } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--sha_256") == 0) {
             if (args->sha256) {
-                printf("Demasiadas opciones.\n");
+                println("Demasiadas opciones.");
                 return 1;
             }
             args->sha256 = true;
         } else if (strcmp(argv[i], "--no-print") ==0) {
             if (args->no_print) {
-                printf("Demasiadas opciones.\n");
+                println("Demasiadas opciones.");
                 return 1;
             }
             args->no_print = true;
         } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--compare") == 0) {
             if (args->compare) {
-                printf("Demasiadas opciones.\n");
+                println("Demasiadas opciones.");
                 return 1;
             }
             args->compare = true;
         } else if (strcmp(argv[i], "--cat") == 0) {
             if (args->concatenate) {
-                printf("Demasiadas opciones.\n");
+                println("Demasiadas opciones.");
                 return 1;
             }
             args->concatenate = true;
         }else if (argv[i][0] == '-') {
-            printf("Opción desconocida: %s\n", argv[i]);
+            println("Opción desconocida: %s", argv[i]);
             return 1;
         } else {
             if (args->path_count == 3) {
-                printf("Error: demasiados archivos.\n");
+                println("Error: demasiados archivos.");
                 return 1;
             }
             args->paths[args->path_count] = argv[i];
@@ -259,34 +260,34 @@ int validate_args(Arguments args) {
     if (args.compare) commands++;
 
     if (commands > 1) {
-        printf("Error: No se pueden combinar varias operaciones.\n");
+        println("Error: No se pueden combinar varias operaciones.");
         return 1;
     } else if (args.no_print && !args.sha256) {
-        printf("Error: --no-print solo se puede usar con --sha_256 o -s.\n");
+        println("Error: --no-print solo se puede usar con --sha_256 o -s.");
         return 1;
     } else if (args.sha256 && args.path_count == 0) {
-        printf("Uso: dat -s <archivo>\n");
+        println("Uso: dat -s <archivo>");
         return 1;
     } else if (args.compare && !args.concatenate &&  args.path_count != 2) {
-        printf("Uso: dat -c <archivo1> <archivo2>\n");
+        println("Uso: dat -c <archivo1> <archivo2>");
         return 1;
     } else if (!args.sha256 && !args.help && !args.version && args.path_count == 0) {
-        printf("Error: Falta especificar el archivo.\n");
+        println("Error: Falta especificar el archivo.");
         return 1;
     } else if ((args.help && args.path_count > 0) || (args.help && args.concatenate)) {
-        printf("Uso: dat -h\n");
+        println("Uso: dat -h");
         return 1;
     } else if ((args.version && args.path_count > 0) || (args.version && args.concatenate)) {
-        printf("Uso: dat -v\n");
+        println("Uso: dat -v");
         return 1;
     } else if (!args.compare && !args.sha256 && !args.concatenate && args.path_count > 1) {
-        printf("Error: demasiados archivos.\n");
+        println("Error: demasiados archivos.");
         return 1;
     } else if ( args.sha256 && ((args.path_count > 1 && !args.concatenate) || (args.concatenate && args.path_count > 3))) {
-        printf("Error: Demasiados archivos");
+        println("Error: Demasiados archivos");
         return 1;
     } else if (args.concatenate && args.path_count != 3) {
-        printf("Uso: dat [operador] --cat <archivo1> <archivo2> <archivo3>\n");
+        println("Uso: dat [operador] --cat <archivo1> <archivo2> <archivo3>");
         return 1;
     }
     return 0;
@@ -304,9 +305,9 @@ void print_separator(const char *top) {
 }
 
 void print_help(void) {
-    printf("Ayuda:\n Versión %s\n\nSintaxis:\n", DAT_VERSION);
-    printf("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.\n");
-    printf(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo. Se le añade --cat para concatenar 2 archivos en 1.\n");
+    println("Ayuda:\n Versión %s\n\nSintaxis:", DAT_VERSION);
+    println("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.");
+    println(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo. Se le añade --cat para concatenar 2 archivos en 1.");
     printf(" -c o --compare: Compara dos archivos.\n\t\t Se le añade --cat para concatenar dos archivos.");
     printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s [flag] <archivo1> <archivo2> <archivo3>\n dat -c [flag] <archivo1> <archivo2> <archivo3>\n dat [-v/--version/-h/--help]\n dat --cat <archivo1> <archivo2> <archivo3>");
 }
@@ -407,7 +408,7 @@ int sha_256(const char *path, unsigned char hash[32], unsigned int *hash_len) {
 void print_hash(const unsigned char *hash, unsigned int hash_len, const char *path) {
     printf("\n");
     print_separator("┬");
-    printf("      │ Archivo: %s \n", path);
+    println("      │ Archivo: %s", path);
     printf("      │ sha256: ");
 
     for (unsigned int i = 0; i < hash_len; i++) {
@@ -543,12 +544,12 @@ int main(int argc, char *argv[]) {
 #endif
 
     if (argc < 2) {
-        printf("Mire dat --help para ver como usar el programa.");
+        println("Mire dat --help para ver como usar el programa.");
         return 1;
     }
 
     if (strcmp(argv[1], "-dev") == 0) {
-        printf("\nDev information:\n Versión: %s\n Dev version: %s\n\n", DAT_VERSION, DEV_VERSION);
+        println("\nDev information:\n Versión: %s\n Dev version: %s\n", DAT_VERSION, DEV_VERSION);
         return 0;
     }
 
@@ -562,7 +563,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     if (args.version) {
-        printf("dat %s\n\n", DAT_VERSION);
+        println("dat %s\n", DAT_VERSION);
         return 0;
     } else if (args.help) {
         print_help();
@@ -606,9 +607,9 @@ int main(int argc, char *argv[]) {
     } else if (args.compare) {
         int result = compare_files(args.paths[0], args.paths[1], &code);
         if (!result) {
-            printf("Los archivos %s y %s son iguales.\n", args.paths[0], args.paths[1]);
+            println("Los archivos %s y %s son iguales.", args.paths[0], args.paths[1]);
         } else if (result == 2) {
-            printf("Los archivos %s y %s son diferentes.\n", args.paths[0], args.paths[1]);
+            println("Los archivos %s y %s son diferentes.", args.paths[0], args.paths[1]);
         } else {
             manage_messages(code);
             return 1;
@@ -642,7 +643,7 @@ int main(int argc, char *argv[]) {
     } else {
         printf("\n");
         print_separator("┬");
-        printf("      │ Archivo: %s \n", args.paths[0]);
+        println("      │ Archivo: %s", args.paths[0]);
         print_separator("┴");
 
         if(display_file(args.paths[0], &code)) {
