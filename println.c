@@ -19,23 +19,6 @@ int resize(void **list, size_t tamaño) {
     return 0;
 }
 
-int resize_f(char **final, size_t extra, size_t *capacity, size_t length) {
-    if (*capacity - length >= extra) {
-        return 0;
-    } else {
-        size_t new_capacity = extra+*capacity;
-        char *temp = realloc(*final, new_capacity);
-
-        if (temp == NULL) {
-            return ERROR_MEMORY;
-        }
-
-        *capacity = new_capacity;
-        *final = temp;
-        return 0;
-    }
-}
-
 int println(const char *structure, ...) {
     if (structure == NULL) {
         return ERROR_STRUCTURE_NULL;
@@ -45,7 +28,7 @@ int println(const char *structure, ...) {
     size_t capacity = 6;
     size_t n = 0;
 
-    int *list = malloc(sizeof(*list) * capacity);
+    unsigned char *list = malloc(sizeof(*list) * capacity);
     if (list == NULL) {
         return ERROR_MEMORY;
     }
@@ -104,8 +87,19 @@ int println(const char *structure, ...) {
     
     va_start(args, structure);
 
-    char *final = malloc(sizeof(char)*6);
-    size_t f_capacity = 6;
+    va_list copy;
+
+    va_copy(copy, args);
+
+    int size = vsnprintf(NULL, 0, structure, copy) + 1;
+    va_end(copy);
+    if (size < 0) {
+        free(list);
+        va_end(args);
+        return ERROR_INVALID_ARGUMENT;
+    }
+
+    char *final = malloc(sizeof(char)*size);
     if (final == NULL) {
         free(list);
         va_end(args);
@@ -122,46 +116,42 @@ int println(const char *structure, ...) {
             break;
         } else if (structure[i] == '%' && x < n) {
             final[y] = '\0';
-            printf("%s", final);
             switch (list[x]) {
                 case 1:
                     int a = va_arg(args, int);
-                    printf("%d", a);
+                    int written = snprintf(final + y, size - y, "%d", a);
+                    y += written;
                     x++;
                     break;
                 case 2:
                     char c = va_arg(args, int);
-                    printf("%c", c);
+                    int written2 = snprintf(final + y, size - y, "%c", c);
+                    y += written2;
                     x++;
                     break;
                 case 3:
                     char *s = va_arg(args, char*);
-                    printf("%s", s);
+                    int written3 = snprintf(final + y, size - y, "%s", s);
+                    y += written3;
                     x++;
                     break;
                 case 4:
                     double d = va_arg(args, double);
-                    printf("%f", d);
+                    int written4 = snprintf(final + y, size - y, "%f", d);
+                    y += written4;
                     x++;
                     break;
             }
             i++;
-            y = 0;
             continue;
         } else {
-            if (resize_f(&final, 2, &f_capacity, y)) {
-                free(final);
-                free(list);
-                va_end(args);
-                return ERROR_MEMORY;
-            }
             final[y] = structure[i];
             y++;
             final[y] = '\0';
         }
         
     }
-    printf("\n");
+    printf("%s\n", final);
     free(final);
     free(list);
     va_end(args);
