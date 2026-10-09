@@ -9,8 +9,10 @@
 #define ERROR_SAME_FILE 2
 #define ERROR_CAT_ACCESS 3
 
-#define DAT_VERSION "0.5.9"
-#define DEV_VERSION "0.5.9.6"
+#define BUFFER_SIZE 32770
+
+#define DAT_VERSION "0.6.0"
+#define DEV_VERSION "0.6.0.6"
 
 typedef enum{
     ALL_RIGHT = 0,
@@ -317,20 +319,39 @@ FILE *open_file(const char *path, const char *mode) {
 }
 
 int print_file(FILE *file) {
-    int c;
     int line = 1;
+
+    char buffer[BUFFER_SIZE];
+    char *buffer2 = calloc(BUFFER_SIZE*16, sizeof(char));
+    if (buffer2 == NULL) {
+        return 1;
+    }
+    size_t y = 0;
+    size_t read = 0;
     
     print_separator("┬");
 
     printf(" %4d │ ", line);
-    while((c = fgetc(file)) != EOF) {
-        printf("%c", c);
-
-        if (c == '\n') {
-            line++;
-            printf(" %4d │ ", line);
+    while((read = fread(buffer, sizeof(char), BUFFER_SIZE, file)) > 0) {
+        
+        for (size_t i = 0; i < read; i++) {
+            if (buffer[i] == '\n') {
+                line ++;
+                int result = snprintf(&buffer2[y], 16, "\n %4d │ ", line);
+                y += result;
+                continue;
+            } else {
+                buffer2[y] = buffer[i];
+                y++;
+            }
         }
+        buffer2[y] = '\0';
+        printf("%s", buffer2);
+        y = 0;
     }
+
+    free(buffer2);
+
     printf("\n");
 
     print_separator("┴");
