@@ -9,10 +9,10 @@
 #define ERROR_SAME_FILE 2
 #define ERROR_CAT_ACCESS 3
 
-#define BUFFER_SIZE 16385
+#define BUFFER_SIZE 32770
 
-#define DAT_VERSION "0.5.9"
-#define DEV_VERSION "0.5.9.6"
+#define DAT_VERSION "0.6.0"
+#define DEV_VERSION "0.6.0.6"
 
 typedef enum{
     ALL_RIGHT = 0,
@@ -198,15 +198,6 @@ void manage_messages(OutputCode code) {
     }
 }
 
-int resize_b(char **buffer, size_t new_size) {
-    char *temp = realloc(*buffer, new_size);
-    if (temp == NULL) {
-        return 1;
-    }
-    *buffer = temp;
-    return 0;
-}
-
 int parse_args(int argc, char *argv[], Arguments *args) {
     *args = (Arguments){0};
 
@@ -328,30 +319,23 @@ FILE *open_file(const char *path, const char *mode) {
 }
 
 int print_file(FILE *file) {
-    int c;
     int line = 1;
 
     char buffer[BUFFER_SIZE];
-    char *buffer2 = calloc(BUFFER_SIZE, sizeof(char));
+    char *buffer2 = calloc(BUFFER_SIZE*16, sizeof(char));
     if (buffer2 == NULL) {
         return 1;
     }
-    size_t size_buffer = BUFFER_SIZE;
     size_t y = 0;
     size_t read = 0;
     
     print_separator("┬");
 
     printf(" %4d │ ", line);
-    while((read = fread(buffer, sizeof(char), 16385, file)) > 0) {
+    while((read = fread(buffer, sizeof(char), BUFFER_SIZE, file)) > 0) {
         
         for (size_t i = 0; i < read; i++) {
             if (buffer[i] == '\n') {
-                if (resize_b(&buffer2, size_buffer + 16)) {
-                    free(buffer2);
-                    return 1;
-                }
-                size_buffer += 16;
                 line ++;
                 int result = snprintf(&buffer2[y], 16, "\n %4d │ ", line);
                 y += result;
