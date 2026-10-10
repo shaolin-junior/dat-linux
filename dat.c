@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <openssl/evp.h>
 #include <errno.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include "println2.h"
 
 #define ERROR_NOT_EXISTS 1
@@ -11,168 +13,59 @@
 
 #define BUFFER_SIZE 32770
 
-#define DAT_VERSION "0.6.0"
-#define DEV_VERSION "0.6.0.6"
+#define DAT_VERSION "0.7.0"
+#define DEV_VERSION "0.7.0.6"
+
+extern int dasm(int fd);
 
 typedef enum{
     ALL_RIGHT = 0,
     ERROR_READ_FILE,
     ERROR_OPEN_FILE,
     ERROR_WRITE_FILE,
+    ERROR_PIPE,
 
 } OutputCode;
 
-#ifdef _WIN32
-    #include <windows.h>
-    DWORD cat_win_error = ERROR_SUCCESS;
-
-    int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
-        HANDLE h_a = CreateFileA(path_a, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-
-        if (h_a == INVALID_HANDLE_VALUE) {
-            DWORD error = GetLastError();
-
-            if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
-                return ERROR_NOT_EXISTS;
-            }
-            cat_win_error = error;
-
-            return ERROR_CAT_ACCESS;
+int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
+    struct stat st1, st2, stf;
+    if (stat(path_a, &st1) != 0) {
+        if (errno == ENOENT) {
+            return ERROR_NOT_EXISTS;
         }
-
-        HANDLE h_b = CreateFileA(path_b, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-
-        if (h_b == INVALID_HANDLE_VALUE) {
-            DWORD error = GetLastError();
-
-            CloseHandle(h_a);
-
-            if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
-                return ERROR_NOT_EXISTS;
-            }
-            cat_win_error = error;
-
-            return ERROR_CAT_ACCESS;
-        }
-
-        HANDLE h_f = CreateFileA(final_path, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-
-        if (h_f == INVALID_HANDLE_VALUE) {
-            DWORD error = GetLastError();
-
-            CloseHandle(h_a);
-            CloseHandle(h_b);
-
-            if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
-                return 0;
-            }
-            cat_win_error = error;
-
-            return ERROR_CAT_ACCESS;
-        }
-
-        BY_HANDLE_FILE_INFORMATION info_a;
-        BY_HANDLE_FILE_INFORMATION info_b;
-        BY_HANDLE_FILE_INFORMATION info_f;
-
-        if (!GetFileInformationByHandle(h_a, &info_a) || !GetFileInformationByHandle(h_b, &info_b) || !GetFileInformationByHandle(h_f, &info_f)) {
-
-            cat_win_error = GetLastError();
-
-            CloseHandle(h_a);
-            CloseHandle(h_b);
-            CloseHandle(h_f);
-
-            return ERROR_CAT_ACCESS;
-        }
-
-        bool same_a = info_f.dwVolumeSerialNumber == info_a.dwVolumeSerialNumber && info_f.nFileIndexHigh == info_a.nFileIndexHigh && info_f.nFileIndexLow == info_a.nFileIndexLow;
-
-        bool same_b = info_f.dwVolumeSerialNumber == info_b.dwVolumeSerialNumber && info_f.nFileIndexHigh == info_b.nFileIndexHigh && info_f.nFileIndexLow == info_b.nFileIndexLow;
-
-        CloseHandle(h_a);
-        CloseHandle(h_b);
-        CloseHandle(h_f);
-
-        if (same_a || same_b) {
-            return ERROR_SAME_FILE;
-        }
-
-        return 0;
+        return ERROR_CAT_ACCESS;
     }
-    void manage_cat_error(int err) {
-        switch (err) {
-            case ERROR_NOT_EXISTS:
-                println("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.");
-                break;
 
-            case ERROR_SAME_FILE:
-                println("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.");
-                break;
-
-            case ERROR_CAT_ACCESS: {
-                char buffer[256];
-
-                DWORD length = FormatMessageA(
-                    FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                    NULL,
-                    cat_win_error,
-                    0,
-                    buffer,
-                    sizeof(buffer),
-                    NULL
-                );
-
-                if (length == 0) {
-                    printf("Error de Windows: %lu\n", cat_win_error);
-                } else {
-                    println("Error de acceso: %s", buffer);
-                }
-            }
+    if (stat(path_b, &st2) != 0) {
+        if (errno == ENOENT) {
+            return ERROR_NOT_EXISTS;
         }
+        return ERROR_CAT_ACCESS;
     }
-#else
-    #include <sys/stat.h>
-    int validate_cat_args(const char *path_a, const char *path_b, const char *final_path) {
-        struct stat st1, st2, stf;
-        if (stat(path_a, &st1) != 0) {
-            if (errno == ENOENT) {
-                return ERROR_NOT_EXISTS;
-            }
-            return ERROR_CAT_ACCESS;
-        }
 
-        if (stat(path_b, &st2) != 0) {
-            if (errno == ENOENT) {
-                return ERROR_NOT_EXISTS;
-            }
-            return ERROR_CAT_ACCESS;
+    if (stat(final_path, &stf) != 0) {
+        if (errno == ENOENT) {
+            return 0;
         }
-
-        if (stat(final_path, &stf) != 0) {
-            if (errno == ENOENT) {
-                return 0;
-            }
-            return ERROR_CAT_ACCESS;
-        }
-
-        return ((st1.st_dev == stf.st_dev) && (st1.st_ino == stf.st_ino)) || ((st2.st_dev == stf.st_dev) && (st2.st_ino == stf.st_ino)) ? ERROR_SAME_FILE: 0;
+        return ERROR_CAT_ACCESS;
     }
-    
-    void manage_cat_error(int err) {
-        switch (err) {
-            case ERROR_NOT_EXISTS:
-                println("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.");
-                break;
-            case ERROR_SAME_FILE:
-                println("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.");
-                break;
-            case ERROR_CAT_ACCESS:
-                perror("dat");
-                break;
-        }
+
+    return ((st1.st_dev == stf.st_dev) && (st1.st_ino == stf.st_ino)) || ((st2.st_dev == stf.st_dev) && (st2.st_ino == stf.st_ino)) ? ERROR_SAME_FILE: 0;
+}
+
+void manage_cat_error(int err) {
+    switch (err) {
+        case ERROR_NOT_EXISTS:
+            println("Error: uno de los archivos a concatenar no existe. Por favor revise si lo ha escrito correctamente.");
+            break;
+        case ERROR_SAME_FILE:
+            println("Error: no puede concatenar un archivo dentro de sí mismo ya que el contenido del archivo donde se concatena se borra.");
+            break;
+        case ERROR_CAT_ACCESS:
+            perror("dat");
+            break;
     }
-#endif
+}
 
 typedef struct {
     bool help;
@@ -181,6 +74,7 @@ typedef struct {
     bool no_print;
     bool compare;
     bool concatenate;
+    bool no_line_mark;
     const char *paths[3];
     int path_count;
 } Arguments;
@@ -194,6 +88,12 @@ void manage_messages(OutputCode code) {
         break;
     case ERROR_WRITE_FILE:
         println("Error al escribir el archivo.");
+        break;
+    case ERROR_PIPE:
+        println("Error con el pipe/splice.");
+        break;
+    case ALL_RIGHT:
+        println("Sin errores/Error desconocido.");
         break;
     }
 }
@@ -238,7 +138,13 @@ int parse_args(int argc, char *argv[], Arguments *args) {
                 return 1;
             }
             args->concatenate = true;
-        }else if (argv[i][0] == '-') {
+        } else if (strcmp(argv[i], "--no-line-n") == 0 || strcmp(argv[i], "-N") == 0) {
+            if (args->no_line_mark) {
+                println("Demasiadas opciones.");
+                return 1;
+            }
+            args->no_line_mark = true;
+        } else if (argv[i][0] == '-') {
             println("Opción desconocida: %s", argv[i]);
             return 1;
         } else {
@@ -276,10 +182,10 @@ int validate_args(Arguments args) {
     } else if (!args.sha256 && !args.help && !args.version && args.path_count == 0) {
         println("Error: Falta especificar el archivo.");
         return 1;
-    } else if ((args.help && args.path_count > 0) || (args.help && args.concatenate)) {
+    } else if ((args.help && args.path_count > 0) || (args.help && args.concatenate) || (args.help && args.no_line_mark)) {
         println("Uso: dat -h");
         return 1;
-    } else if ((args.version && args.path_count > 0) || (args.version && args.concatenate)) {
+    } else if ((args.version && args.path_count > 0) || (args.version && args.concatenate) || (args.help && args.no_line_mark)) {
         println("Uso: dat -v");
         return 1;
     } else if (!args.compare && !args.sha256 && !args.concatenate && args.path_count > 1) {
@@ -291,6 +197,11 @@ int validate_args(Arguments args) {
     } else if (args.concatenate && args.path_count != 3) {
         println("Uso: dat [operador] --cat <archivo1> <archivo2> <archivo3>");
         return 1;
+    } else if (args.no_print && args.no_line_mark) {
+        println("Error: no se pueden mezclar estas 2 opciones.");
+        return 1;
+    } else if ((args.compare && args.no_line_mark) || (args.concatenate && args.no_line_mark && !args.sha256)) {
+        println("Error: no se pueden mezclar estas 2 opciones.");
     }
     return 0;
 }
@@ -309,7 +220,7 @@ void print_separator(const char *top) {
 void print_help(void) {
     println("Ayuda:\n Versión %s\n\nSintaxis:", DAT_VERSION);
     println("\nComandos básicos:\n -h o --help: Muestra el menú de ayuda.\n -v o --version: Muestra la versión del programa.");
-    println(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo. Se le añade --cat para concatenar 2 archivos en 1.");
+    println(" -s o --sha_256: Muestra el hash del archivo en formato sha256.\n\t\t Se le añade --no-print para no mostrar el contenido del archivo. Se le añade --cat para concatenar 2 archivos en 1. Se le añade -N para no mostrar numero de linea.");
     printf(" -c o --compare: Compara dos archivos.\n\t\t Se le añade --cat para concatenar dos archivos.");
     printf("\n dat <ruta/archivo>\n dat [opción] <ruta/archivo>\n dat -s [flag] <archivo1> <archivo2> <archivo3>\n dat -c [flag] <archivo1> <archivo2> <archivo3>\n dat [-v/--version/-h/--help]\n dat --cat <archivo1> <archivo2> <archivo3>");
 }
@@ -363,11 +274,32 @@ int print_file(FILE *file) {
     return 0;
 }
 
-int display_file(const char *path, OutputCode *code) {
+int display_file(const char *path, OutputCode *code, Arguments args) {
     FILE *file = open_file(path, "rb");
     if (file == NULL) {
         *code = ERROR_OPEN_FILE;
         return 1;
+    }
+    if (args.no_line_mark) {
+        print_separator("─");
+        int error = dasm(fileno(file));
+        printf("\n");
+        print_separator("─");
+        if (error) {
+            switch (error)
+            {
+            case 1:
+                *code = ERROR_READ_FILE;
+                break;
+            case 2:
+                *code = ERROR_PIPE;
+                break;
+            }
+            fclose(file);
+            return 1;
+        }
+        fclose(file);
+        return 0;
     }
 
     int error = print_file(file);
@@ -559,11 +491,6 @@ int concatenate(const char *path_a, const char *path_b, const char *path_final, 
 
 int main(int argc, char *argv[]) {
 
-#ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleCP(CP_UTF8);
-#endif
-
     if (argc < 2) {
         println("Mire dat --help para ver como usar el programa.");
         return 1;
@@ -606,7 +533,7 @@ int main(int argc, char *argv[]) {
 
             if (!args.no_print) {
                 
-                if(display_file(args.paths[i], &code)) {
+                if(display_file(args.paths[i], &code, args)) {
                     manage_messages(code);
                     return 1;
                 }
@@ -667,7 +594,7 @@ int main(int argc, char *argv[]) {
         println("      │ Archivo: %s", args.paths[0]);
         print_separator("┴");
 
-        if(display_file(args.paths[0], &code)) {
+        if(display_file(args.paths[0], &code, args)) {
             manage_messages(code);
             return 1;
         }

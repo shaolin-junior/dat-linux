@@ -1,23 +1,23 @@
 CC = gcc
-WINDRES = windres
+ASM = nasm
 
-TARGET = dat.exe
+TARGET = dat
 
 CFILES = $(wildcard *.c)
-OFILES = $(CFILES:.c=.o)
+ASMFILES = $(wildcard *.asm)
 
-RESOURCE = resource.o
+OFILES = $(CFILES:.c=.o) $(ASMFILES:.asm=.o)
 
 LIBS = -lcrypto
 
-$(TARGET): $(OFILES) $(RESOURCE)
-	$(CC) $(OFILES) $(RESOURCE) -o $(TARGET) $(LIBS)
+$(TARGET): $(OFILES)
+	$(CC) $(OFILES) -o $(TARGET) $(LIBS)
 
 %.o: %.c
-	$(CC) -c $< -o $@
+		$(CC) -Wall -Wextra -c $< -o $@
 
-$(RESOURCE): resource.rc
-	$(WINDRES) resource.rc -o resource.o
+%.o: %.asm
+	$(ASM) -f elf64 $< -o $@
 
 clean:
-	rm -f $(OFILES) $(RESOURCE)
+	rm -f $(OFILES) $(TARGET) $(RESOURCE)
