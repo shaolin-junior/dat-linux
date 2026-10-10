@@ -257,7 +257,7 @@ int print_file(FILE *file) {
             }
         }
         buffer2[y] = '\0';
-        printf("%s", buffer2);
+        fwrite(buffer2, sizeof(char), read, stdout);
         y = 0;
     }
 
